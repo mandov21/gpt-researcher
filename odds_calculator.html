@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Odds Converter & Take Calculator</title>
+<style>
+  :root{--bg:#f4f6f8;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#dde3e9;--accent:#0b5fff;--good:#0a7a43}
+  @media (prefers-color-scheme:dark){:root{--bg:#10161c;--card:#18212a;--ink:#e7edf2;--mute:#93a1ae;--line:#2a3743;--accent:#5b9bff;--good:#4cd08a}}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:22px;margin:4px 0 14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  label{display:block;font-size:12px;color:var(--mute);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+  input,select{width:100%;padding:9px 10px;font-size:16px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink)}
+  .f{flex:1 1 180px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+  .scroll{overflow-x:auto}
+  .big{font-weight:700;color:var(--accent)}
+  .note{color:var(--mute);font-size:13px;margin-top:8px}
+  .err{color:#c0392b;font-size:13px;margin-top:6px;min-height:1em}
+  h2{font-size:16px;margin:0 0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Odds Converter &amp; Take Calculator</h1>
+
+  <div class="card">
+    <div class="row">
+      <div class="f"><label for="fmt">Input format</label>
+        <select id="fmt">
+          <option value="am">American (-120, +150)</option>
+          <option value="dec">Decimal (1.83)</option>
+          <option value="frac">Fractional (5/2)</option>
+          <option value="prob">Probability % (60)</option>
+        </select></div>
+      <div class="f"><label for="a">Side A price (e.g. favorite)</label><input id="a" value="-200" inputmode="text" autocomplete="off"></div>
+      <div class="f"><label for="b">Side B price (optional)</label><input id="b" placeholder="leave blank to solve" inputmode="text" autocomplete="off"></div>
+      <div class="f"><label for="cm">Custom take % (optional)</label><input id="cm" placeholder="e.g. 5" inputmode="decimal"></div>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="note">Side A is the price you are offering. The calculator solves Side B so the market carries each take. Take = overround (sum of implied probabilities &minus; 100%).</div>
+  </div>
+
+  <div class="card">
+    <h2>Side A in every format</h2>
+    <div class="scroll"><table id="aconv"></table></div>
+  </div>
+
+  <div class="card">
+    <h2>Missing side (Side B) by take</h2>
+    <div class="scroll"><table id="solve"></table></div>
+  </div>
+
+  <div class="card" id="bothcard" style="display:none">
+    <h2>Both sides entered</h2>
+    <div class="scroll"><table id="both"></table></div>
+  </div>
+</div>
+
+<script>
+// ---------- core maths ----------
+function amToProb(a){return a<0? -a/(-a+100) : 100/(a+100);}
+function probToDec(p){return 1/p;}
+function decToAm(d){return d>=2 ? (d-1)*100 : -100/(d-1);}
+function gcd(a,b){return b?gcd(b,a%b):a;}
+function decToFrac(d){
+  const x=d-1;
+  for(let den=1;den<=20;den++){
+    const n=Math.round(x*den);
+    if(n>0 && Math.abs(n/den-x)<0.005){const g=gcd(n,den);return (n/g)+"/"+(den/g);}
+  }
+  const n=Math.round(x*100), g=gcd(n,100);
+  return (n/g)+"/"+(100/g);
+}
+function fmtAm(a){const r=Math.round(a);return r>0?"+"+r:String(r);}
+function parseToProb(str,fmt){
+  const s=String(str).trim();
+  if(!s) return null;
+  let p;
+  if(fmt==="am"){const a=parseFloat(s.replace("+",""));if(isNaN(a)||Math.abs(a)<100)return NaN;p=amToProb(a);}
+  else if(fmt==="dec"){const d=parseFloat(s);if(isNaN(d)||d<=1)return NaN;p=1/d;}
+  else if(fmt==="frac"){const m=s.match(/^(\d+(?:\.\d+)?)\s*[\/-]\s*(\d+(?:\.\d+)?)$/);if(!m)return NaN;const d=parseFloat(m[1])/parseFloat(m[2])+1;if(!(d>1))return NaN;p=1/d;}
+  else {const v=parseFloat(s.replace("%",""));if(isNaN(v)||v<=0||v>=100)return NaN;p=v/100;}
+  return p;
+}
+function rowFor(label,p){
+  if(!(p>0 && p<1)) return `<tr><td>${label}</td><td colspan="4">n/a (probability out of range)</td></tr>`;
+  const d=probToDec(p);
+  return `<tr><td>${label}</td><td class="big">${fmtAm(decToAm(d))}</td><td>${d.toFixed(3)}</td><td>${decToFrac(d)}</td><td>${(p*100).toFixed(2)}%</td></tr>`;
+}
+const HEAD="<tr><th></th><th>American</th><th>Decimal</th><th>Fractional</th><th>Implied %</th></tr>";
+
+function run(){
+  const fmt=document.getElementById("fmt").value;
+  const err=document.getElementById("err");
+  err.textContent="";
+  const pa=parseToProb(document.getElementById("a").value,fmt);
+  const pbRaw=parseToProb(document.getElementById("b").value,fmt);
+  const aconv=document.getElementById("aconv"), solve=document.getElementById("solve");
+  const bothcard=document.getElementById("bothcard"), both=document.getElementById("both");
+  bothcard.style.display="none";
+  if(pa===null||isNaN(pa)){err.textContent="Enter a valid Side A price for the chosen format.";aconv.innerHTML="";solve.innerHTML="";return;}
+  aconv.innerHTML=HEAD+rowFor("Side A (as entered)",pa);
+
+  // takes: 4, 6, 8 plus optional custom, ordered ascending
+  let takes=[4,6,8];
+  const cm=parseFloat(document.getElementById("cm").value);
+  if(!isNaN(cm)&&cm>=0&&!takes.includes(cm)) takes.push(cm);
+  takes.sort((x,y)=>x-y);
+
+  let html="<tr><th>Take</th><th>Side B American</th><th>Side B Decimal</th><th>Side B Fractional</th><th>Side B Implied %</th><th>Hold</th></tr>";
+  takes.forEach(t=>{
+    const m=t/100, pb=1+m-pa;
+    if(pb>0 && pb<1){
+      const d=1/pb;
+      html+=`<tr><td>${t}%</td><td class="big">${fmtAm(decToAm(d))}</td><td>${d.toFixed(3)}</td><td>${decToFrac(d)}</td><td>${(pb*100).toFixed(2)}%</td><td>${(m/(1+m)*100).toFixed(2)}%</td></tr>`;
+    } else {
+      html+=`<tr><td>${t}%</td><td colspan="5">n/a - Side A is too short (or too long) to carry a ${t}% take</td></tr>`;
+    }
+  });
+  solve.innerHTML=html;
+
+  if(pbRaw!==null){
+    if(isNaN(pbRaw)){err.textContent="Side B price is not valid for the chosen format.";return;}
+    const over=pa+pbRaw-1, hold=over/(1+over);
+    const fa=pa/(pa+pbRaw), fb=pbRaw/(pa+pbRaw);
+    bothcard.style.display="block";
+    both.innerHTML=HEAD+rowFor("Side A (priced)",pa)+rowFor("Side B (priced)",pbRaw)+
+      `<tr><td>Overround (take)</td><td colspan="4" class="big">${(over*100).toFixed(2)}%</td></tr>`+
+      `<tr><td>Hold</td><td colspan="4">${(hold*100).toFixed(2)}%</td></tr>`+
+      rowFor("Side A fair (no-vig)",fa)+rowFor("Side B fair (no-vig)",fb);
+  }
+}
+["fmt","a","b","cm"].forEach(id=>document.getElementById(id).addEventListener("input",run));
+run();
+</script>
+</body>
+</html>
