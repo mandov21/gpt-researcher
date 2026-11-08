@@ -33,28 +33,33 @@
 
   <div class="card">
     <div class="row">
-      <div class="f"><label for="fmt">Input format</label>
+      <div class="f"><label for="mode">Mode</label>
+        <select id="mode">
+          <option value="prob">Probability in &rarr; price both sides</option>
+          <option value="price">Odds in &rarr; solve other side</option>
+        </select></div>
+      <div class="f" id="fmtwrap"><label for="fmt">Input format</label>
         <select id="fmt">
           <option value="am">American (-120, +150)</option>
           <option value="dec">Decimal (1.83)</option>
           <option value="frac">Fractional (5/2)</option>
           <option value="prob">Probability % (60)</option>
         </select></div>
-      <div class="f"><label for="a">Side A price (e.g. favorite)</label><input id="a" value="-200" inputmode="text" autocomplete="off"></div>
-      <div class="f"><label for="b">Side B price (optional)</label><input id="b" placeholder="leave blank to solve" inputmode="text" autocomplete="off"></div>
+      <div class="f"><label for="a" id="alabel">Side A fair probability %</label><input id="a" value="60" inputmode="text" autocomplete="off"></div>
+      <div class="f" id="bwrap"><label for="b">Side B price (optional)</label><input id="b" placeholder="leave blank to solve" inputmode="text" autocomplete="off"></div>
       <div class="f"><label for="cm">Custom take % (optional)</label><input id="cm" placeholder="e.g. 5" inputmode="decimal"></div>
     </div>
     <div class="err" id="err"></div>
-    <div class="note">Side A is the price you are offering. The calculator solves Side B so the market carries each take. Take = overround (sum of implied probabilities &minus; 100%).</div>
+    <div class="note">Probability mode: type the fair chance of Side A and both sides are priced at each take. Odds mode: Side A is the price you are offering. The calculator solves Side B so the market carries each take. Take = overround (sum of implied probabilities &minus; 100%).</div>
   </div>
 
-  <div class="card">
+  <div class="card" id="aconvcard">
     <h2>Side A in every format</h2>
     <div class="scroll"><table id="aconv"></table></div>
   </div>
 
   <div class="card">
-    <h2>Missing side (Side B) by take</h2>
+    <h2 id="solvetitle">Missing side (Side B) by take</h2>
     <div class="scroll"><table id="solve"></table></div>
   </div>
 
@@ -97,7 +102,41 @@ function rowFor(label,p){
 }
 const HEAD="<tr><th></th><th>American</th><th>Decimal</th><th>Fractional</th><th>Implied %</th></tr>";
 
+function runProb(){
+  const err=document.getElementById("err");
+  err.textContent="";
+  const v=parseFloat(String(document.getElementById("a").value).replace("%",""));
+  const solve=document.getElementById("solve");
+  if(isNaN(v)||v<=0||v>=100){err.textContent="Enter Side A probability as a % between 0 and 100 (e.g. 60).";solve.innerHTML="";return;}
+  const p=v/100;
+  let takes=[4,6,8];
+  const cm=parseFloat(document.getElementById("cm").value);
+  if(!isNaN(cm)&&cm>=0&&!takes.includes(cm)) takes.push(cm);
+  takes.sort((x,y)=>x-y);
+  const cell=q=>{
+    if(!(q>0&&q<1)) return '<td colspan="3">n/a</td>';
+    const d=1/q;
+    return `<td class="big">${fmtAm(decToAm(d))}</td><td>${d.toFixed(3)}</td><td>${decToFrac(d)}</td>`;
+  };
+  let html=`<tr><th>Take</th><th>A Amer</th><th>A Dec</th><th>A Frac</th><th>B Amer</th><th>B Dec</th><th>B Frac</th></tr>`;
+  html+=`<tr><td>Fair (0%)</td>${cell(p)}${cell(1-p)}</tr>`;
+  takes.forEach(t=>{
+    const k=1+t/100;
+    html+=`<tr><td>${t}%</td>${cell(p*k)}${cell((1-p)*k)}</tr>`;
+  });
+  solve.innerHTML=html;
+}
+
 function run(){
+  const mode=document.getElementById("mode").value;
+  const isProb=mode==="prob";
+  document.getElementById("fmtwrap").style.display=isProb?"none":"";
+  document.getElementById("bwrap").style.display=isProb?"none":"";
+  document.getElementById("aconvcard").style.display=isProb?"none":"";
+  document.getElementById("alabel").textContent=isProb?"Side A fair probability %":"Side A price (e.g. favorite)";
+  document.getElementById("solvetitle").textContent=isProb?"Prices for both sides by take":"Missing side (Side B) by take";
+  document.getElementById("bothcard").style.display="none";
+  if(isProb){runProb();return;}
   const fmt=document.getElementById("fmt").value;
   const err=document.getElementById("err");
   err.textContent="";
@@ -139,6 +178,11 @@ function run(){
   }
 }
 ["fmt","a","b","cm"].forEach(id=>document.getElementById(id).addEventListener("input",run));
+document.getElementById("mode").addEventListener("change",()=>{
+  const a=document.getElementById("a");
+  a.value=document.getElementById("mode").value==="prob"?"60":"-200";
+  run();
+});
 run();
 </script>
 </body>
