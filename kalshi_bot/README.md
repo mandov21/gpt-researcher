@@ -14,4 +14,6 @@ and are enforced in `risk.py`. Tests: `pytest kalshi_bot`.
 Guardrails: skips prices <5c or >95c, abstains when the model differs from the market by >20 points (usually model error), abstains on same-day markets after 4pm local.
 Calibrate `sigma`/`bias` in `WeatherSignal` from settled days before trusting any edge.
 
+Daily dry-run: `kalshi_bot/daily.sh` (writes CSVs + calibration_latest.txt into `kalshi_bot/data/`; never places orders).
+
 Not yet implemented: fill tracking (fills are assumed), WebSocket feed, backtesting, PnL settlement.

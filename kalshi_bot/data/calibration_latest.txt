@@ -1,0 +1,3 @@
+forecast error: only 0 settled days with logs; need >=5 (ideally 14+)
+paper trades settled: 0, wins: 0, P&L after est. fees: $+0.00
+Go live only if P&L is positive over many trades (100+), not a handful.

@@ -28,3 +28,12 @@ def test_observed_floor_zeroes_lower_bins():
     assert abs(prob_yes(mk("greater", 62), 58, 1.5, floor_obs=58)
                + prob_yes(mk("between", 59, 62), 58, 1.5, floor_obs=58)
                + prob_yes(mk("between", 58, 58), 58, 1.5, floor_obs=58) - 1) < 1e-9
+
+
+def test_actual_high_bins():
+    from kalshi_bot.calibrate import actual_high
+    ms = [{"result": "no", "strike_type": "between", "floor_strike": 55, "cap_strike": 56},
+          {"result": "yes", "strike_type": "between", "floor_strike": 57, "cap_strike": 58}]
+    assert actual_high(ms) == 57.5
+    assert actual_high([{"result": "yes", "strike_type": "greater", "floor_strike": 62, "cap_strike": None}]) == 63.0
+    assert actual_high([{"result": "yes", "strike_type": "less", "floor_strike": None, "cap_strike": 55}]) == 54.0

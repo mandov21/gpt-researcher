@@ -4,7 +4,10 @@ Default is dry-run on the demo env. Live trading requires KALSHI_ENV=live,
 KALSHI_DRY_RUN=0 AND --confirm-live.
 """
 import argparse
+import csv
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
 import time
 import uuid
 
@@ -15,6 +18,17 @@ from .strategy import decide
 from .weather import WeatherSignal
 
 log = logging.getLogger("kalshi_bot")
+PAPER = Path("paper_trades.csv")
+
+
+def log_paper(o, n: int, fair: float) -> None:
+    new = not PAPER.exists()
+    with PAPER.open("a", newline="") as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow(["ts_utc", "ticker", "side", "count", "price", "fair", "net_edge"])
+        w.writerow([datetime.now(timezone.utc).isoformat(timespec="seconds"), o.ticker, o.side, n,
+                    o.price, round(fair, 4), round(o.edge, 4)])
 
 
 def run_once(client: KalshiClient, cfg: Config, risk: RiskManager, signal, markets: list[dict],
@@ -36,6 +50,7 @@ def run_once(client: KalshiClient, cfg: Config, risk: RiskManager, signal, marke
         log.info("%s %s %s x%d @ $%.2f net_edge=%.3f", "WOULD BUY" if cfg.dry_run else "BUY",
                  o.ticker, o.side.upper(), n, o.price, o.edge)
         if cfg.dry_run:
+            log_paper(o, n, signal.fair_probability(m))
             continue
         resp = client.place_order(o.ticker, o.side, n, o.price, client_order_id=str(uuid.uuid4()))
         filled = int(float(resp.get("fill_count", 0)))
