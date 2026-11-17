@@ -15,12 +15,12 @@ MKT = {"ticker": "T", "yes_ask_dollars": "0.4500", "no_ask_dollars": "0.5600"}
 
 
 def test_buys_yes_with_edge():
-    o = decide(MKT, Fixed(0.65), 10, 0.07, 0.25)
+    o = decide(MKT, Fixed(0.62), 10, 0.07, 0.25)
     assert o and o.side == "yes" and o.price == 0.45 and o.count > 0 and o.edge > 0.07
 
 
 def test_buys_no_with_edge():
-    o = decide(MKT, Fixed(0.20), 10, 0.07, 0.25)
+    o = decide(MKT, Fixed(0.30), 10, 0.07, 0.25)
     assert o and o.side == "no"
 
 
