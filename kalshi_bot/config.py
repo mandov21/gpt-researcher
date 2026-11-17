@@ -15,11 +15,11 @@ class Config:
     private_key_path: str = ""
     dry_run: bool = True              # log intended orders, don't send
     # --- risk limits (all hard caps, enforced in risk.py) ---
-    max_contracts_per_order: int = 10
-    max_position_per_market: int = 25     # contracts, either side
-    max_exposure_usd: float = 50.0        # total $ at risk across open positions+orders
-    max_daily_loss_usd: float = 20.0      # halt trading once breached
-    min_edge: float = 0.05                # required (fair - price) in probability units
+    max_contracts_per_order: int = 5
+    max_position_per_market: int = 10
+    max_exposure_usd: float = 10.0        # total $ at risk (sized for a ~$25 account)
+    max_daily_loss_usd: float = 3.0
+    min_edge: float = 0.07                # required NET-of-fee edge in probability units
     kelly_fraction: float = 0.25          # fractional Kelly sizing
 
     @property

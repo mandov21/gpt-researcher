@@ -12,16 +12,16 @@ class RiskManager:
     realized_pnl_usd: float = 0.0
     halted: bool = False
 
-    def record_fill(self, ticker: str, side: str, count: int, price_cents: int) -> None:
+    def record_fill(self, ticker: str, side: str, count: int, price: float) -> None:
         self.positions[ticker] = self.positions.get(ticker, 0) + (count if side == "yes" else -count)
-        self.exposure_usd += count * price_cents / 100
+        self.exposure_usd += count * price
 
     def record_pnl(self, delta_usd: float) -> None:
         self.realized_pnl_usd += delta_usd
         if self.realized_pnl_usd <= -self.cfg.max_daily_loss_usd:
             self.halted = True
 
-    def check(self, ticker: str, side: str, count: int, price_cents: int) -> tuple[int, str]:
+    def check(self, ticker: str, side: str, count: int, price: float) -> tuple[int, str]:
         """Return (allowed_count, reason). allowed_count may be reduced; 0 means reject."""
         if self.halted:
             return 0, "halted: daily loss limit hit"
@@ -30,7 +30,7 @@ class RiskManager:
         cur = self.positions.get(ticker, 0)
         room = self.cfg.max_position_per_market - max(0, signed * cur)
         c = min(c, room)
-        cost = price_cents / 100
+        cost = price
         budget = self.cfg.max_exposure_usd - self.exposure_usd
         c = min(c, int(budget // cost)) if cost > 0 else 0
         if c <= 0:

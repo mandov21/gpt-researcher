@@ -1,7 +1,7 @@
 """Minimal Kalshi REST client with RSA-PSS request signing.
 
-Prices are integer cents (1-99) on the wire. Verify endpoints against
-https://docs.kalshi.com before going live; the API evolves.
+Prices are dollar strings ("0.5600"). Orders use the V2 endpoint (the legacy
+/portfolio/orders write endpoints return 410). Verify against docs.kalshi.com before going live.
 """
 import base64
 import time
@@ -72,29 +72,33 @@ class KalshiClient:
         return self._request("GET", f"/markets/{ticker}", auth=False)["market"]
 
     def get_orderbook(self, ticker: str) -> dict:
-        return self._request("GET", f"/markets/{ticker}/orderbook", auth=False)["orderbook"]
+        """Returns {"yes_dollars": [[price, qty], ...], "no_dollars": [...]} of resting BIDS."""
+        return self._request("GET", f"/markets/{ticker}/orderbook", auth=False).get("orderbook_fp", {})
 
     # -- portfolio (authenticated) ---------------------------------------
-    def get_balance_cents(self) -> int:
-        return self._request("GET", "/portfolio/balance")["balance"]
+    def get_balance_usd(self) -> float:
+        return float(self._request("GET", "/portfolio/balance")["balance"]) / 100  # cents -> $
 
     def get_positions(self) -> list[dict]:
         return self._request("GET", "/portfolio/positions").get("market_positions", [])
 
-    def get_open_orders(self) -> list[dict]:
-        return self._request("GET", "/portfolio/orders", params={"status": "resting"}).get("orders", [])
-
-    def place_limit_order(self, ticker: str, side: str, count: int, price_cents: int,
-                          action: str = "buy", client_order_id: str | None = None) -> dict:
-        assert side in ("yes", "no") and action in ("buy", "sell")
-        assert 1 <= price_cents <= 99 and count >= 1
+    def place_order(self, ticker: str, side: str, count: int, price: float,
+                    client_order_id: str | None = None, tif: str = "immediate_or_cancel") -> dict:
+        """V2 order. side='yes' buys YES at `price`; side='no' buys NO at `price`.
+        The V2 book is YES-only: buying NO at q == selling YES (ask) at 1-q."""
+        assert side in ("yes", "no") and count >= 1 and 0.01 <= price <= 0.99
+        yes_price = price if side == "yes" else round(1 - price, 4)
         body = {
-            "ticker": ticker, "action": action, "side": side, "type": "limit",
-            "count": count, f"{side}_price": price_cents,
+            "ticker": ticker,
+            "side": "bid" if side == "yes" else "ask",
+            "count": f"{count:.2f}",
+            "price": f"{yes_price:.4f}",
+            "time_in_force": tif,
+            "self_trade_prevention_type": "taker_at_cross",
         }
         if client_order_id:
             body["client_order_id"] = client_order_id
-        return self._request("POST", "/portfolio/orders", json=body)
+        return self._request("POST", "/portfolio/events/orders", json=body)
 
     def cancel_order(self, order_id: str) -> dict:
-        return self._request("DELETE", f"/portfolio/orders/{order_id}")
+        return self._request("DELETE", f"/portfolio/events/orders/{order_id}")
